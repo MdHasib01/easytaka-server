@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { DIVISIONS } from '../constants.js';
+import { DIVISIONS, ROLES } from '../constants.js';
 import * as ctrl from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { nidUpload } from '../middleware/upload.js';
 import { validate } from '../middleware/validate.js';
-import { emailSchema, objectId, optionalUrl, passwordSchema } from '../utils/http.js';
+import { avatarSchema, emailSchema, objectId, optionalUrl, passwordSchema } from '../utils/http.js';
 
 const router = Router();
 
@@ -18,13 +18,22 @@ const authLimiter = rateLimit({
   message: { message: 'Too many attempts. Please try again later.' },
 });
 
-const registerSchema = z
+const registerBrandAdminSchema = z.object({
+  role: z.literal(ROLES.MANAGER),
+  name: z.string().trim().min(2).max(120),
+  email: emailSchema,
+  password: passwordSchema,
+  phone: z.string().trim().max(30).optional(),
+  brandName: z.string().trim().max(120).optional(),
+});
+
+const registerSmmSchema = z
   .object({
+    role: z.literal(ROLES.SMM),
     name: z.string().trim().min(2).max(120),
     email: emailSchema,
     password: passwordSchema,
     phone: z.string().trim().max(30).optional(),
-    brandId: objectId,
     nidNumber: z
       .string()
       .trim()
@@ -38,12 +47,22 @@ const registerSchema = z
     path: ['assignedWorkingDivision'],
   });
 
+const registerSchema = z.preprocess(
+  (val) => {
+    if (typeof val === 'object' && val !== null && !val.role) {
+      return { ...val, role: ROLES.SMM };
+    }
+    return val;
+  },
+  z.discriminatedUnion('role', [registerBrandAdminSchema, registerSmmSchema]),
+);
+
 const loginSchema = z.object({ email: emailSchema, password: z.string().min(1).max(128) });
 
 const updateMeSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   phone: z.string().trim().max(30).optional(),
-  avatar: optionalUrl,
+  avatar: avatarSchema,
 });
 
 const changePasswordSchema = z.object({

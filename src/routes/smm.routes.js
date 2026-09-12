@@ -4,7 +4,7 @@ import { DIVISIONS, MANAGEMENT_ROLES, STAFF_ROLES } from '../constants.js';
 import * as ctrl from '../controllers/smm.controller.js';
 import { authenticate, authorize, requireSmm } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { emailSchema, objectId, passwordSchema } from '../utils/http.js';
+import { avatarSchema, emailSchema, objectId, passwordSchema } from '../utils/http.js';
 
 const router = Router();
 
@@ -31,6 +31,7 @@ const updateSchema = z
   .object({
     name: z.string().trim().min(2).max(120),
     phone: z.string().trim().max(30),
+    avatar: avatarSchema,
     designation: z.string().trim().max(80),
     nidDivision: z.enum(DIVISIONS),
     assignedWorkingDivision: z.enum(DIVISIONS),

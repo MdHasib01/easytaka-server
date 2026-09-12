@@ -6,7 +6,7 @@ const { ObjectId } = mongoose.Schema.Types;
 const smmSchema = new mongoose.Schema(
   {
     user: { type: ObjectId, ref: 'User', required: true, unique: true },
-    brand: { type: ObjectId, ref: 'Brand', required: true, index: true },
+    brand: { type: ObjectId, ref: 'Brand', index: true, default: null },
     designation: { type: String, trim: true, default: 'SMM Executive' },
 
     // Division policy: an SMM must work in a division other than their NID division.

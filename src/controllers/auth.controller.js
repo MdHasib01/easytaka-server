@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import { ROLES } from '../constants.js';
 import { signToken } from '../middleware/auth.js';
 import { Brand, Smm, User } from '../models/index.js';
-import { createSmmWithUser } from '../services/workforce.service.js';
+import { createBrandAdminWithUser, createSmmWithUser } from '../services/workforce.service.js';
 import { isPlatformAdmin } from '../utils/access.js';
 import { ApiError } from '../utils/ApiError.js';
 
@@ -34,18 +34,26 @@ const uploadNid = (file) =>
 const discardNid = (images) =>
   Promise.allSettled(images.map((img) => destroy(img.public_id, { type: 'authenticated' })));
 
-/** SMM self-signup. The NID photos are stored privately and the SMM waits for admin verification. */
+/** Self-signup for Brand Admins (MANAGER) or SMMs (with NID). Neither requires an existing brand selection. */
 export async function register(req, res) {
   if (!env.ALLOW_PUBLIC_REGISTER) throw ApiError.forbidden('Public registration is disabled');
+
+  // 1. Brand Admin (MANAGER) self-signup
+  if (req.body.role === ROLES.MANAGER) {
+    const { name, email, password, phone, brandName } = req.body;
+    const { user } = await createBrandAdminWithUser({ name, email, password, phone, brandName });
+    res.status(201).json(await session(req, user));
+    return;
+  }
+
+  // 2. SMM self-signup
   if (!env.cloudinaryEnabled) throw new ApiError(503, 'NID uploads are not configured on this server');
 
   const front = req.files?.nidFront?.[0];
   const back = req.files?.nidBack?.[0];
   if (!front || !back) throw ApiError.badRequest('Upload photos of both the front and back of your NID');
 
-  const { brandId, nidNumber, ...fields } = req.body;
-  const brand = await Brand.findOne({ _id: brandId, status: 'Active' });
-  if (!brand) throw ApiError.badRequest('The selected brand is not available');
+  const { nidNumber, ...fields } = req.body;
   // Checked before uploading so a duplicate signup doesn't leave orphaned NID images.
   if (await User.exists({ email: fields.email })) {
     throw ApiError.conflict('An account with this email already exists');
@@ -63,7 +71,7 @@ export async function register(req, res) {
   try {
     const { user } = await createSmmWithUser({
       ...fields,
-      brandId: brand._id,
+      brandId: fields.brandId || null,
       nid: {
         number: nidNumber,
         front: { publicId: frontImg.public_id, format: frontImg.format },

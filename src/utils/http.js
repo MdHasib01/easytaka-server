@@ -8,6 +8,14 @@ export const httpUrl = z.url({ protocol: /^https?$/, error: 'Must be a valid htt
 
 export const optionalUrl = httpUrl.optional().or(z.literal('').transform(() => undefined));
 
+export const avatarSchema = z
+  .union([
+    httpUrl,
+    z.string().regex(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, 'Must be a valid image URL or data URI'),
+  ])
+  .optional()
+  .or(z.literal('').transform(() => undefined));
+
 export const emailSchema = z.string().trim().toLowerCase().email('Invalid email address').max(200);
 export const passwordSchema = z.string().min(6, 'Password must be at least 6 characters').max(128);
 

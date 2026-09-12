@@ -4,7 +4,7 @@ import { ROLES } from '../constants.js';
 import * as ctrl from '../controllers/user.controller.js';
 import { authenticate, requirePlatformAdmin } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { emailSchema, objectId, passwordSchema } from '../utils/http.js';
+import { avatarSchema, emailSchema, objectId, passwordSchema } from '../utils/http.js';
 
 const router = Router();
 
@@ -27,6 +27,7 @@ const updateSchema = z
   .object({
     name: z.string().trim().min(2).max(120),
     phone: z.string().trim().max(30),
+    avatar: avatarSchema,
     status: z.enum(['Active', 'Suspended']),
   })
   .partial();

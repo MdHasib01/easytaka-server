@@ -8,7 +8,7 @@ export async function createSmmWithUser({
   email,
   password,
   phone,
-  brandId,
+  brandId = null,
   nidDivision,
   assignedWorkingDivision,
   designation,
@@ -17,11 +17,11 @@ export async function createSmmWithUser({
 }) {
   if (await User.exists({ email })) throw ApiError.conflict('An account with this email already exists');
 
-  const user = await User.create({ name, email, password, phone, role: ROLES.SMM, brand: brandId });
+  const user = await User.create({ name, email, password, phone, role: ROLES.SMM, brand: brandId || null });
   try {
     const smm = await Smm.create({
       user: user._id,
-      brand: brandId,
+      brand: brandId || null,
       nidDivision,
       assignedWorkingDivision,
       designation,
@@ -33,6 +33,35 @@ export async function createSmmWithUser({
     await User.deleteOne({ _id: user._id });
     throw err;
   }
+}
+
+/** Creates a brand admin (MANAGER) account, optionally creating/linking a brand if brandName is given. */
+export async function createBrandAdminWithUser({ name, email, password, phone, brandName }) {
+  if (await User.exists({ email })) throw ApiError.conflict('An account with this email already exists');
+
+  let brand = null;
+  const trimmedBrand = brandName?.trim();
+  if (trimmedBrand) {
+    brand = await Brand.findOne({ name: trimmedBrand });
+    if (!brand) {
+      brand = await Brand.create({
+        name: trimmedBrand,
+        logo: '🏷️',
+        status: 'Active',
+      });
+    }
+  }
+
+  const user = await User.create({
+    name,
+    email,
+    password,
+    phone: phone?.trim() || undefined,
+    role: ROLES.MANAGER,
+    brand: brand?._id || null,
+  });
+
+  return { user, brand };
 }
 
 /** Replaces an SMM's product assignments, enforcing the brand's products-per-SMM rule. */

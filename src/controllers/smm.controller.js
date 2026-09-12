@@ -73,13 +73,19 @@ export async function get(req, res) {
 
 export async function update(req, res) {
   const smm = await loadSmm(req);
-  const { name, phone, ...fields } = req.body;
+  const { name, phone, avatar, ...fields } = req.body;
   smm.set(fields);
   await smm.save();
-  if (name !== undefined || phone !== undefined) {
+  if (name !== undefined || phone !== undefined || avatar !== undefined) {
     await User.updateOne(
       { _id: smm.user._id },
-      { $set: { ...(name !== undefined && { name }), ...(phone !== undefined && { phone }) } },
+      {
+        $set: {
+          ...(name !== undefined && { name }),
+          ...(phone !== undefined && { phone }),
+          ...(avatar !== undefined && { avatar }),
+        },
+      },
     );
     await smm.populate('user', USER_FIELDS);
   }
