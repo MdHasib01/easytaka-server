@@ -4,7 +4,7 @@ import { MANAGEMENT_ROLES } from '../constants.js';
 import * as ctrl from '../controllers/product.controller.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { objectId, optionalUrl } from '../utils/http.js';
+import { objectId, optionalUrl, avatarSchema } from '../utils/http.js';
 
 const router = Router();
 
@@ -13,7 +13,7 @@ const productFields = {
   sku: z.string().trim().min(1).max(60),
   type: z.string().trim().max(60),
   shortDescription: z.string().trim().max(500),
-  image: optionalUrl,
+  image: avatarSchema,
   status: z.enum(['Active', 'Inactive']),
 };
 
