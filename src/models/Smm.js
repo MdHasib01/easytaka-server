@@ -53,7 +53,11 @@ const smmSchema = new mongoose.Schema(
     jobHolderBonusClaimed: { type: Boolean, default: false },
     jobHolderSince: Date,
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
 );
 
 smmSchema.pre('validate', function enforceDivisionPolicy() {

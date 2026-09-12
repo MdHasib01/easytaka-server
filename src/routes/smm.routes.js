@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DIVISIONS, MANAGEMENT_ROLES, STAFF_ROLES } from '../constants.js';
 import * as ctrl from '../controllers/smm.controller.js';
 import { authenticate, authorize, requireSmm } from '../middleware/auth.js';
+import { nidUpload } from '../middleware/upload.js';
 import { validate } from '../middleware/validate.js';
 import { avatarSchema, emailSchema, objectId, passwordSchema } from '../utils/http.js';
 
@@ -45,6 +46,8 @@ router.use(authenticate);
 // Current SMM
 router.get('/me', requireSmm, ctrl.me);
 router.get('/me/career', requireSmm, ctrl.career);
+router.get('/me/nid', requireSmm, ctrl.myNid);
+router.post('/me/nid', requireSmm, nidUpload, ctrl.uploadMyNid);
 router.post('/me/job-holder/claim', requireSmm, ctrl.claimJobHolderBonus);
 
 // Workforce management

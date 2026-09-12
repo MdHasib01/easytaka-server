@@ -43,8 +43,20 @@ export async function authenticate(req, _res, next) {
   req.user = user;
   if (user.role === ROLES.SMM) {
     req.smm = await Smm.findOne({ user: user._id });
-    const verified = !req.smm || req.smm.verification?.status === 'Verified';
-    if (!verified && !req.originalUrl.startsWith('/api/auth')) {
+    if (!req.smm) {
+      req.smm = await Smm.create({
+        user: user._id,
+        brand: user.brand || null,
+        nidDivision: 'Dhaka',
+        verification: { status: 'Pending' },
+      });
+    }
+    const verified = req.smm.verification?.status === 'Verified';
+    if (
+      !verified &&
+      !req.originalUrl.startsWith('/api/auth') &&
+      !req.originalUrl.startsWith('/api/smms/me/nid')
+    ) {
       throw ApiError.forbidden('Your NID verification is not complete yet', { code: 'NID_NOT_VERIFIED' });
     }
   }

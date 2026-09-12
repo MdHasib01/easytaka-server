@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { signedUrl } from '../config/cloudinary.js';
 import { env } from '../config/env.js';
 import { ROLES } from '../constants.js';
@@ -91,7 +92,10 @@ export async function update(req, res) {
   if (req.body.status === 'Suspended' && sameId(user._id, req.user._id)) {
     throw ApiError.badRequest('You cannot suspend your own account');
   }
-  user.set(req.body);
+  // Admin cannot edit user personal info; only account status toggling is permitted
+  if (req.body.status && ['Active', 'Suspended'].includes(req.body.status)) {
+    user.status = req.body.status;
+  }
   await user.save();
   const [result] = await withSmm([user]);
   res.json(result);
@@ -125,4 +129,21 @@ export async function verify(req, res) {
   };
   await smm.save();
   res.json({ verification: smm.verification });
+}
+
+export async function resetPassword(req, res) {
+  const user = await loadUser(req.params.id);
+  const randomChars = crypto.randomBytes(4).toString('hex');
+  const tempPassword = `Easy#${randomChars}!Aa1`;
+  user.password = tempPassword;
+  await user.save();
+
+  console.log(`[EMAIL DISPATCH] Sent temporary password to ${user.email}. Temporary password: ${tempPassword}`);
+
+  res.json({
+    success: true,
+    email: user.email,
+    tempPassword,
+    message: `A temporary password has been dispatched to ${user.email}`,
+  });
 }

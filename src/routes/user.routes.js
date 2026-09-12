@@ -48,5 +48,6 @@ router.post('/', validate(createSchema), ctrl.create);
 router.patch('/:id', validate(updateSchema), ctrl.update);
 router.get('/:id/nid', ctrl.nid);
 router.post('/:id/verification', validate(verificationSchema), ctrl.verify);
+router.post('/:id/reset-password', ctrl.resetPassword);
 
 export default router;

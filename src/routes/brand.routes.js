@@ -80,5 +80,6 @@ router.put(
 );
 router.get('/:id/overview', authorize(...STAFF_ROLES), ctrl.overview);
 router.post('/:id/payroll/run', authorize(...MANAGEMENT_ROLES), ctrl.runPayroll);
+router.delete('/:id', authorize(ROLES.ADMIN), ctrl.remove);
 
 export default router;

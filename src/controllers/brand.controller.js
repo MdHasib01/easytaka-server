@@ -1,5 +1,17 @@
 import { ROLES } from '../constants.js';
-import { Brand, Smm, User } from '../models/index.js';
+import {
+  Brand,
+  Conversation,
+  Mission,
+  Product,
+  Redemption,
+  RewardItem,
+  Smm,
+  SocialAccount,
+  Submission,
+  Transaction,
+  User,
+} from '../models/index.js';
 import { brandOverview } from '../services/stats.service.js';
 import { runWeeklyPayroll } from '../services/wallet.service.js';
 import { assertBrandAccess, isPlatformAdmin } from '../utils/access.js';
@@ -103,4 +115,28 @@ export async function overview(req, res) {
 
 export async function runPayroll(req, res) {
   res.json(await runWeeklyPayroll(await loadBrand(req)));
+}
+
+export async function remove(req, res) {
+  if (!isPlatformAdmin(req.user)) throw ApiError.forbidden('Only platform admins can delete brands');
+  const brand = await Brand.findById(req.params.id);
+  if (!brand) throw ApiError.notFound('Brand not found');
+
+  const brandId = brand._id;
+
+  await Promise.all([
+    User.updateMany({ brand: brandId }, { $set: { brand: null } }),
+    Smm.updateMany({ brand: brandId }, { $set: { brand: null } }),
+    Product.deleteMany({ brand: brandId }),
+    Mission.deleteMany({ brand: brandId }),
+    SocialAccount.deleteMany({ brand: brandId }),
+    Submission.deleteMany({ brand: brandId }),
+    RewardItem.deleteMany({ brand: brandId }),
+    Redemption.deleteMany({ brand: brandId }),
+    Transaction.deleteMany({ brand: brandId }),
+    Conversation.deleteMany({ brand: brandId }),
+  ]);
+
+  await brand.deleteOne();
+  res.status(204).end();
 }
