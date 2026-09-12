@@ -1,10 +1,12 @@
 import { ROLES, STAFF_ROLES } from '../constants.js';
 import { Conversation, Message, SocialAccount, User } from '../models/index.js';
+import { emitToUsers } from '../realtime.js';
 import { isPlatformAdmin, sameId } from '../utils/access.js';
 import { ApiError } from '../utils/ApiError.js';
-import { escapeRegex } from '../utils/http.js';
+import { escapeRegex, queryEnum } from '../utils/http.js';
 
 const PARTICIPANT_FIELDS = 'name role avatar brand';
+export const MAX_GROUP_MEMBERS = 300;
 
 /** SMMs talk to staff of their brand and platform admins; staff talk within their brand. */
 function canContact(me, other) {
@@ -12,6 +14,18 @@ function canContact(me, other) {
   if (isPlatformAdmin(me) || isPlatformAdmin(other)) return true;
   if (!sameId(me.brand, other.brand)) return false;
   return !(me.role === ROLES.SMM && other.role === ROLES.SMM);
+}
+
+/** Mongo filter for the users `me` may contact — the query form of canContact. */
+function contactFilter(me) {
+  const filter = { _id: { $ne: me._id }, status: 'Active' };
+  const platformAdmins = { role: ROLES.ADMIN, brand: null };
+  if (me.role === ROLES.SMM) {
+    filter.$or = [{ brand: me.brand, role: { $in: STAFF_ROLES } }, platformAdmins];
+  } else if (!isPlatformAdmin(me)) {
+    filter.$or = [{ brand: me.brand }, platformAdmins];
+  }
+  return filter;
 }
 
 function markRead(conversation, userId, at = new Date()) {
@@ -34,21 +48,35 @@ async function postMessage(conversation, sender, content) {
   markRead(conversation, sender._id, message.createdAt);
   await conversation.save();
   await message.populate('sender', PARTICIPANT_FIELDS);
+  emitToUsers(conversation.participants, {
+    type: 'message:new',
+    conversationId: String(conversation._id),
+    message,
+  });
   return message;
 }
 
+/** Tells every member about a new conversation; the creator has already read it. */
+function announceConversation(conversation) {
+  emitToUsers(conversation.participants, {
+    type: 'conversation:new',
+    conversation: { ...conversation.toJSON(), unreadCount: 0 },
+  });
+}
+
 export async function contacts(req, res) {
-  const me = req.user;
-  const filter = { _id: { $ne: me._id }, status: 'Active' };
-  const platformAdmins = { role: ROLES.ADMIN, brand: null };
-  if (me.role === ROLES.SMM) {
-    filter.$or = [{ brand: me.brand, role: { $in: STAFF_ROLES } }, platformAdmins];
-  } else if (!isPlatformAdmin(me)) {
-    filter.$or = [{ brand: me.brand }, platformAdmins];
-  }
+  const filter = contactFilter(req.user);
+  const role = queryEnum(req.query.role, Object.values(ROLES), 'role');
+  if (role) filter.role = role;
   if (req.query.q) filter.name = { $regex: escapeRegex(req.query.q), $options: 'i' };
 
-  res.json(await User.find(filter).select(PARTICIPANT_FIELDS).sort({ role: 1, name: 1 }).limit(100));
+  res.json(
+    await User.find(filter)
+      .select(PARTICIPANT_FIELDS)
+      .populate('brand', 'name')
+      .sort({ role: 1, name: 1 })
+      .limit(200),
+  );
 }
 
 export async function list(req, res) {
@@ -90,6 +118,7 @@ export async function create(req, res) {
   }
 
   let conversation = await Conversation.findOne({
+    isGroup: { $ne: true },
     participants: { $all: [me._id, other._id], $size: 2 },
     relatedAccount: relatedAccountId ?? null,
   });
@@ -103,9 +132,50 @@ export async function create(req, res) {
     });
   }
 
-  const posted = await postMessage(conversation, me, message);
   await conversation.populate('participants', PARTICIPANT_FIELDS);
+  if (created) announceConversation(conversation);
+  const posted = await postMessage(conversation, me, message);
   res.status(created ? 201 : 200).json({ conversation, message: posted });
+}
+
+/**
+ * Creates a named group. Members are the union of the picked users and everyone the caller
+ * can contact who holds one of the picked roles.
+ */
+export async function createGroup(req, res) {
+  const me = req.user;
+  const { name, participantIds, roles, message } = req.body;
+
+  const picked = [];
+  if (participantIds.length) picked.push({ _id: { $in: participantIds } });
+  if (roles.length) picked.push({ role: { $in: roles } });
+
+  const members = await User.find({ $and: [contactFilter(me), { $or: picked }] })
+    .select('_id brand')
+    .limit(MAX_GROUP_MEMBERS + 1);
+  if (!members.length) throw ApiError.badRequest('Select at least one member');
+  if (members.length > MAX_GROUP_MEMBERS) {
+    throw ApiError.badRequest(`A group can have at most ${MAX_GROUP_MEMBERS} members`);
+  }
+  const found = new Set(members.map((m) => String(m._id)));
+  if (participantIds.some((id) => !found.has(id))) {
+    throw ApiError.forbidden('You cannot add some of the selected users');
+  }
+
+  const sharedBrand = members.every((m) => sameId(m.brand, members[0].brand)) ? members[0].brand : null;
+  const conversation = await Conversation.create({
+    isGroup: true,
+    name,
+    createdBy: me._id,
+    participants: [me._id, ...members.map((m) => m._id)],
+    brand: me.brand ?? sharedBrand ?? null,
+    reads: [{ user: me._id, at: new Date() }],
+  });
+  await conversation.populate('participants', PARTICIPANT_FIELDS);
+  announceConversation(conversation);
+
+  const posted = message ? await postMessage(conversation, me, message) : null;
+  res.status(201).json({ conversation: { ...conversation.toJSON(), unreadCount: 0 }, message: posted });
 }
 
 /** Messages, newest page first but returned in chronological order. Marks the thread read. */

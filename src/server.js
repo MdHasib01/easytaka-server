@@ -1,6 +1,7 @@
 import { env } from './config/env.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { createApp } from './app.js';
+import { attachRealtime } from './realtime.js';
 
 async function main() {
   await connectDB();
@@ -10,9 +11,12 @@ async function main() {
     console.info(`[server] EasyTaka API listening on http://localhost:${env.PORT}/api (${env.NODE_ENV})`);
     if (env.demoMode) console.info('[server] Demo endpoints enabled at /api/demo');
   });
+  const wss = attachRealtime(server);
 
   const shutdown = (signal) => {
     console.info(`[server] ${signal} received, shutting down…`);
+    for (const ws of wss.clients) ws.terminate();
+    wss.close();
     server.close(async () => {
       await disconnectDB();
       process.exit(0);

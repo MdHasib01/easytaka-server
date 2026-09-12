@@ -10,6 +10,10 @@ const conversationSchema = new mongoose.Schema(
       index: true,
     },
     brand: { type: ObjectId, ref: 'Brand' },
+    // Group chats have a name and any number of members; 1:1 chats have neither.
+    isGroup: { type: Boolean, default: false },
+    name: { type: String, trim: true, maxlength: 80 },
+    createdBy: { type: ObjectId, ref: 'User' },
     topic: { type: String, trim: true, maxlength: 160 },
     relatedAccount: { type: ObjectId, ref: 'SocialAccount', default: null },
     relatedMission: { type: ObjectId, ref: 'Mission', default: null },
